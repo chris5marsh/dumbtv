@@ -211,8 +211,9 @@ protected package. Measured on a Fire OS 7 television:
 
 1. **The HOME key cannot be intercepted.** Fire OS handles it before any
    accessibility key filter runs. So `Guard`, a small accessibility service, waits
-   for Amazon's home window instead. It sees window changes only and reads no
-   screen content.
+   for Amazon's home window instead. It sees window changes only. It reads screen
+   content only inside NordVPN, after you pick a VPN location on the home screen,
+   to press NordVPN's Disconnect button.
 2. **Android delays app launches for 5 s after HOME** (`APP_SWITCH_DELAY_TIME`),
    which is why other launchers flash Amazon's home. A launch fired by
    AlarmManager comes from `system_server` and is exempt.

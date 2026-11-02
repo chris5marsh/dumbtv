@@ -236,6 +236,8 @@ public final class Home extends Activity {
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         registerReceiver(time, f);
         tick();
+        ui.removeCallbacks(vpnTick);
+        ui.post(vpnTick);
     }
 
     @Override
@@ -247,6 +249,7 @@ public final class Home extends Activity {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        ui.removeCallbacks(vpnTick);
         stopColorAnimation();
         targetColor = 0;
         unregisterReceiver(time);
@@ -361,7 +364,7 @@ public final class Home extends Activity {
      */
     private List<int[]> rowBlocks(View content) {
         List<int[]> rows = new ArrayList<>();
-        for (Row row : new Row[] {apps, inputs}) {
+        for (Row row : new Row[] {apps, vpn, inputs}) {
             if (row.scroll.getVisibility() == View.VISIBLE) {
                 rows.add(new int[] {topIn(row.title, content), topIn(row.scroll, content) + row.scroll.getHeight()});
             } else if (row.grid.getVisibility() == View.VISIBLE) {
@@ -416,6 +419,75 @@ public final class Home extends Activity {
             v = (View) v.getParent();
         }
         return y;
+    }
+
+    private Row vpn;
+    private TextView vpnPill;
+    private String vpnRows = "";
+    private final Runnable vpnTick = new Runnable() {
+        @Override public void run() {
+            updateVpn();
+            if (resumed) ui.postDelayed(this, 1000);
+        }
+    };
+
+    private void openVpn() {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(VpnWatch.PACKAGE);
+        if (intent != null) startActivity(intent);
+        else android.widget.Toast.makeText(this, "NordVPN is not installed", android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private TextView vpnButton(String label) {
+        TextView button = Ui.text(this, 15, Ui.TEXT, Ui.MEDIUM);
+        button.setText(label);
+        button.setFocusable(true);
+        button.setGravity(Gravity.CENTER_VERTICAL);
+        button.setPadding(dp(18), dp(14), dp(18), dp(14));
+        Ui.focusStyle(button, 0xff8bd5b5, Ui.SURFACE, dp(20));
+        return button;
+    }
+
+    private void updateVpn() {
+        if (vpnPill == null) return;
+        boolean enabled = VpnWatch.available;
+        boolean on = enabled && VpnWatch.connected;
+        vpnPill.setText(on ? VpnState.flag(VpnWatch.country) + "  VPN connected · "
+                + VpnState.duration(android.os.SystemClock.elapsedRealtime() - VpnWatch.since)
+                : enabled ? "VPN disconnected" : "VPN status unavailable");
+        String saved = VpnWatch.prefs(this).getString("recent", "");
+        String pending = VpnWatch.pending();
+        String key = saved + ":" + on + ":" + VpnWatch.country + ":" + pending;
+        if (key.equals(vpnRows)) return;
+        vpnRows = key;
+        View focused = getCurrentFocus();
+        int focus = vpn.strip.indexOfChild(focused);
+        Object focusCode = focus >= 0 ? focused.getTag() : null;
+        vpn.strip.removeAllViews();
+        java.util.List<String> locations = VpnState.recent(saved, "");
+        if (locations.isEmpty()) {
+            TextView empty = vpnButton("Open NordVPN to connect");
+            empty.setOnClickListener(v -> openVpn());
+            vpn.strip.addView(empty);
+        }
+        int gap = dp(18), width = (rowWidth() - (VpnState.RECENT - 1) * gap) / VpnState.RECENT;
+        for (String code : locations) {
+            boolean here = on && code.equals(VpnWatch.country);
+            String action = code.equals(pending) ? "Connecting…"
+                    : here && "".equals(pending) ? "Disconnecting…"
+                    : here ? "Disconnect" : "Connect";
+            TextView card = vpnButton(VpnState.flag(code) + "  " + VpnState.name(code)
+                    + "\n" + action);
+            card.setContentDescription(VpnState.name(code) + (here ? ", connected. " : ". ") + action);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, dp(76));
+            params.rightMargin = vpn.strip.getChildCount() < VpnState.RECENT - 1 ? gap : 0;
+            vpn.strip.addView(card, params);
+            card.setTag(code);
+            card.setOnClickListener(v -> VpnWatch.request(this, here ? "" : code));
+            // Cards reorder as connections change, so focus follows the country, not the slot.
+            if (code.equals(focusCode)) focus = vpn.strip.getChildCount() - 1;
+        }
+        if (focus >= 0 && vpn.strip.getChildCount() > 0)
+            vpn.strip.getChildAt(Math.min(focus, vpn.strip.getChildCount() - 1)).requestFocus();
     }
 
     private View build() {
@@ -503,6 +575,8 @@ public final class Home extends Activity {
                             && Catalog.APPS.equals(tile.kind)) {
                         boolean hasBelow = grid && belowInGrid(parent, tile);
                         if (!hasBelow) {
+                            View shortcut = nearest(vpn.strip, focused);
+                            if (shortcut != null) return shortcut;
                             View remembered = rememberedTile(Catalog.INPUTS);
                             if (remembered != null) return remembered;
                             View below = nearest(inputs.tiles(), focused);
@@ -515,12 +589,27 @@ public final class Home extends Activity {
                             && Catalog.INPUTS.equals(tile.kind)) {
                         boolean hasAbove = grid && aboveInGrid(parent, tile);
                         if (!hasAbove) {
+                            View shortcut = nearest(vpn.strip, focused);
+                            if (shortcut != null) return shortcut;
                             View remembered = rememberedTile(Catalog.APPS);
                             if (remembered != null) return remembered;
                             View above = nearest(apps.tiles(), focused);
                             if (above != null) return above;
                         }
                     }
+                }
+                if (focused != null && focused.getParent() == vpn.strip) {
+                    if (direction == View.FOCUS_UP) {
+                        View above = nearest(apps.tiles(), focused);
+                        if (above != null) return above;
+                    }
+                    if (direction == View.FOCUS_DOWN) {
+                        View below = nearest(inputs.tiles(), focused);
+                        return below == null ? focused : below;
+                    }
+                    int index = vpn.strip.indexOfChild(focused);
+                    if (direction == View.FOCUS_LEFT && index == 0) return focused;
+                    if (direction == View.FOCUS_RIGHT && index == vpn.strip.getChildCount() - 1) return focused;
                 }
                 return super.focusSearch(focused, direction);
             }
@@ -550,11 +639,17 @@ public final class Home extends Activity {
         under.leftMargin = dp(2);
         when.addView(meter, under);
         head.addView(when, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        vpnPill = chip("VPN status unavailable", v -> openVpn());
+        // Fixed-width digits stop the ticking timer from nudging Options and Settings sideways.
+        vpnPill.setFontFeatureSettings("tnum");
+        head.addView(vpnPill);
         head.addView(chip("Options", v -> startActivity(new Intent(this, Options.class))));
         head.addView(chip("Settings", v -> openSettings()));
         column.addView(head, new LinearLayout.LayoutParams(MATCH, WRAP));
 
         apps = new Row(Catalog.APPS, "Apps", column);
+        vpn = new Row("vpn", "Recent VPN connections", column);
+        vpn.grid.setVisibility(View.GONE);
         inputs = new Row(Catalog.INPUTS, "Inputs", column);
         return root;
     }
@@ -702,7 +797,7 @@ public final class Home extends Activity {
         boolean enabled = !Catalog.INPUTS.equals(row.kind) || "on".equals(cfg.get(Config.INPUTS));
         List<Item> shown = enabled ? Catalog.visible(cfg, row.kind, row.all, recentFor(row.kind))
                 : new ArrayList<>();
-        int[] size = cardSize();
+        int[] size = gridMode ? gridCard() : cardSize();
         int w = size[0], h = Catalog.APPS.equals(row.kind) ? size[1] : Math.round(size[1] * 0.56f);
         String labels = cfg.get(Config.LABELS);
         int accent = cfg.accent();
@@ -812,6 +907,23 @@ public final class Home extends Activity {
             colorAnimation.cancel();
             colorAnimation = null;
         }
+    }
+
+    /**
+     * The card size widened so a grid's columns span the row exactly: without it, whatever width
+     * is left after the last whole column ends up as a wider margin on the right.
+     */
+    private int[] gridCard() {
+        int[] size = cardSize();
+        int gap = dp(18), avail = rowWidth();
+        int cols = Math.max(1, (avail + gap) / (size[0] + gap));
+        int w = (avail - (cols - 1) * gap) / cols;
+        return new int[] {w, Math.round(size[1] * (float) w / size[0])};
+    }
+
+    /** Width between the 56 dp margins that every row title and grid keeps. */
+    private int rowWidth() {
+        return getResources().getDisplayMetrics().widthPixels - 2 * dp(56);
     }
 
     private int[] cardSize() {
