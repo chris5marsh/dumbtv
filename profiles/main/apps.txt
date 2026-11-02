@@ -1,0 +1,15 @@
+# Apps on the TV this profile was saved from: package, then where it came from.
+# appstore = Amazon's Appstore; sideload = installed from a file, kept in apks/.
+air.ITVMobilePlayer                      appstore
+ar.tvplayer.tv                           sideload
+com.apple.atve.amazon.appletv            appstore
+com.channel4.ondemand                    appstore
+com.disney.disneyplus                    appstore
+com.esaba.downloader                     appstore
+com.hbo.hbonow                           appstore
+com.ionitech.airscreen                   appstore
+com.mobileiq.demand5                     appstore
+com.netflix.ninja                        appstore
+com.nordvpn.android                      appstore
+uk.co.bbc.iplayer                        appstore
+uk.co.uktv.dave                          appstore

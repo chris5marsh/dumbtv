@@ -35,6 +35,22 @@ if len(args) == 5 and args[0] == '-s' and args[2] == 'push' and 'pushed' in stat
     Path(state['pushed'], Path(args[4]).name).write_bytes(Path(args[3]).read_bytes())
     print(f'{args[3]}: 1 file pushed')
     sys.exit(0)
+if len(args) == 5 and args[0] == '-s' and args[2] == 'pull':
+    # Files the TV refuses to hand over, like home.conf on Fire OS 8, are listed in 'unreadable'.
+    if args[3] in state.get('unreadable', []):
+        print(f"adb: error: failed to stat remote object '{args[3]}': Permission denied")
+        sys.exit(1)
+    Path(args[4]).write_text(state.get('files', {}).get(args[3], f'contents of {args[3]}'))
+    print(f'{args[3]}: 1 file pulled')
+    sys.exit(0)
+if len(args) > 4 and args[0] == '-s' and args[2] == 'install-multiple':
+    # apks/<package>/base.apk names its package by its folder.
+    name = Path(args[-1]).parent.name
+    state['packages'][name] = {'system': False, 'enabled': True, 'launchable': True}
+    state.setdefault('installed', []).append(name)
+    save()
+    print('Success')
+    sys.exit(0)
 if len(args) < 3 or args[0] != '-s' or args[2] != 'shell':
     sys.exit(91)
 
@@ -112,6 +128,15 @@ elif command == 'cmd package help':
 elif words[:2] == ['pm', 'path']:
     if words[2] in apps:
         print(f'package:/system/app/{words[2]}.apk')
+elif command in ('pm list packages -3', 'pm list packages -3 -i'):
+    for p, a in apps.items():
+        if not a['system']:
+            print(f"package:{p}" + (f"  installer={a.get('installer', 'null')}" if command.endswith('-i') else ''))
+elif words[:3] == ['cmd', 'package', 'query-activities']:
+    # Launchable apps answer under both categories; a disabled one has no activity to list.
+    for p, a in apps.items():
+        if a.get('launchable') and a['enabled']:
+            print(f'{p}/.Main')
 elif command == 'pm list packages -s':
     print('\n'.join(f'package:{p}' for p, a in apps.items() if a['system']))
 elif command == 'pm list packages -d':

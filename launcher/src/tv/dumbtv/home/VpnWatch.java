@@ -40,8 +40,16 @@ public final class VpnWatch extends NotificationListenerService {
     /** Read by {@link Guard}: NordVPN's Disconnect button should be pressed. */
     static volatile boolean disconnecting;
 
-    static SharedPreferences prefs(Context context) {
-        return context.getSharedPreferences("vpn", Context.MODE_PRIVATE);
+    /** Lives in home.conf, so a saved profile carries it to another TV. */
+    static final String RECENT_KEY = "vpn.recent";
+
+    /** Recent locations, newest first, as comma-separated country codes. */
+    static String recent(Context c) {
+        String saved = Config.get(c).get(RECENT_KEY, "");
+        if (!saved.isEmpty()) return saved;
+        // Versions before home.conf kept them in private preferences.
+        SharedPreferences old = c.getSharedPreferences("vpn", Context.MODE_PRIVATE);
+        return old.getString("recent", "");
     }
 
     static String pending() {
@@ -158,9 +166,10 @@ public final class VpnWatch extends NotificationListenerService {
             country = code;
             connected = true;
             available = true;
-            SharedPreferences p = prefs(this);
-            String recent = TextUtils.join(",", VpnState.recent(p.getString("recent", ""), code));
-            p.edit().putString("recent", recent).apply();
+            String before = recent(this);
+            String after = TextUtils.join(",", VpnState.recent(before, code));
+            // Every write redraws the home screen on its next return, so only a change is saved.
+            if (!after.equals(Config.get(this).get(RECENT_KEY, ""))) Config.get(this).set(RECENT_KEY, after);
             return;
         }
         clear(true);

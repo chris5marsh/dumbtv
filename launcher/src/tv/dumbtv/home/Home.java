@@ -454,7 +454,7 @@ public final class Home extends Activity {
         vpnPill.setText(on ? VpnState.flag(VpnWatch.country) + "  VPN connected · "
                 + VpnState.duration(android.os.SystemClock.elapsedRealtime() - VpnWatch.since)
                 : enabled ? "VPN disconnected" : "VPN status unavailable");
-        String saved = VpnWatch.prefs(this).getString("recent", "");
+        String saved = VpnWatch.recent(this);
         String pending = VpnWatch.pending();
         String key = saved + ":" + on + ":" + VpnWatch.country + ":" + pending;
         if (key.equals(vpnRows)) return;
@@ -1099,7 +1099,7 @@ public final class Home extends Activity {
 
     /** Offers to connect the VPN before opening an app that needs it; Yes is the default. */
     private void askVpn(Tile t) {
-        java.util.List<String> recent = VpnState.recent(VpnWatch.prefs(this).getString("recent", ""), "");
+        java.util.List<String> recent = VpnState.recent(VpnWatch.recent(this), "");
         String code = recent.isEmpty() ? VpnWatch.ANY : recent.get(0);
         AlertDialog d = new AlertDialog.Builder(this, Ui.DIALOG)
                 .setTitle("You aren't connected to the VPN")

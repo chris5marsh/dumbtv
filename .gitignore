@@ -8,3 +8,4 @@ launcher/*.keystore
 video/
 __pycache__/
 *.pyc
+profiles/*/apks/
