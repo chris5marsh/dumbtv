@@ -54,6 +54,7 @@ final class Catalog {
     static void art(PackageManager pm, Item it, boolean cornerIcon) {
         if (it.info == null) return;
         it.banner = it.info.loadBanner(pm);
+        if (it.banner != null) it.banner = Banner.fit(it.banner);
         if (it.banner == null || cornerIcon) it.icon = it.info.loadIcon(pm);
     }
 

@@ -18,6 +18,7 @@ import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 
 /**
  * Fire OS keeps HOME bound to Amazon's protected launcher and handles the HOME key before any
@@ -48,6 +49,8 @@ public final class Guard extends AccessibilityService {
     private static final long COVER_MAX_MS = 1500;
     private static final long REPEAT_MS = 1000;
     private static final long LAUNCH_FALLBACK_MS = 150;
+    private static final long PRESS_EVERY_MS = 250;
+    private static final long PRESS_MAX_MS = 8000;
     private static final long SHOWN_DELAY_MS = Build.VERSION.SDK_INT >= 34 ? 300 : 0;
 
     private static volatile boolean paused;
@@ -56,6 +59,8 @@ public final class Guard extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable uncover = this::uncover;
     private final Runnable launch = () -> home(this);
+    private final Runnable press = this::press;
+    private long pressUntil;
     private View cover;
     private long lastLaunch;
     private boolean onAmazonHome;
@@ -86,6 +91,40 @@ public final class Guard extends AccessibilityService {
     static void arrived(Context c) {
         AlarmManager alarms = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         alarms.cancel(launch(c));
+    }
+
+    /** Presses NordVPN's own Disconnect button once its screen is up, for {@link VpnWatch}. */
+    static void pressDisconnect() {
+        Guard g = running;
+        if (g == null) return;
+        g.pressUntil = SystemClock.uptimeMillis() + PRESS_MAX_MS;
+        g.handler.removeCallbacks(g.press);
+        g.handler.postDelayed(g.press, PRESS_EVERY_MS);
+    }
+
+    private void press() {
+        if (!VpnWatch.disconnecting || SystemClock.uptimeMillis() > pressUntil) return;
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root != null && VpnWatch.PACKAGE.contentEquals(String.valueOf(root.getPackageName()))) {
+            AccessibilityNodeInfo n = labelled(root, "Disconnect", 0);
+            while (n != null && !n.isClickable()) n = n.getParent();
+            if (n != null && n.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                VpnWatch.disconnecting = false;
+                return;
+            }
+        }
+        handler.postDelayed(press, PRESS_EVERY_MS);
+    }
+
+    /** NordVPN draws with Compose, where findAccessibilityNodeInfosByText finds nothing, so walk the tree. */
+    private static AccessibilityNodeInfo labelled(AccessibilityNodeInfo n, String text, int depth) {
+        if (n == null || depth > 30) return null;
+        if (text.contentEquals(String.valueOf(n.getText()))) return n;
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo found = labelled(n.getChild(i), text, depth + 1);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     /** Called once our home window is on screen. */
@@ -134,6 +173,7 @@ public final class Guard extends AccessibilityService {
     public void onDestroy() {
         handler.removeCallbacks(uncover);
         handler.removeCallbacks(launch);
+        handler.removeCallbacks(press);
         try {
             unregisterReceiver(screenOn);
         } catch (IllegalArgumentException ignored) {

@@ -8,3 +8,6 @@ launcher/*.keystore
 video/
 __pycache__/
 *.pyc
+profiles/*/apks/
+# A profile keeps its dumbtv answers on purpose (scripts/profile.sh).
+!profiles/*/dumbtv.conf

@@ -102,7 +102,8 @@ So dumbtv home ([launcher/](../launcher/README.md)) watches for Amazon's home
 instead and replaces it.
 
 **Fire OS 7 and 8: an accessibility service, `Guard`.** It receives window changes
-only and reads no screen content.
+only. It reads screen content only inside NordVPN, after you pick a VPN location on
+the home screen, to press NordVPN's Disconnect button.
 
 - The HOME key never reaches an accessibility key filter on Fire OS, so `Guard`
   reacts to Amazon's home window appearing.

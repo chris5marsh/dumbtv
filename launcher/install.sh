@@ -2,6 +2,7 @@
 # Installs dumbtv home on the TV and gives it the HOME button.
 #   ./launcher/install.sh            download the release APK (checksum-verified), install, take over HOME
 #   ./launcher/install.sh --build    build from source instead (needs a JDK and the Android SDK)
+#   ./launcher/install.sh --apk FILE install an APK you built before, e.g. one a profile saved
 #   ./launcher/install.sh --undo     hand HOME back to Amazon's launcher
 # Pick the device with ADB_SERIAL when more than one is connected.
 set -euo pipefail
@@ -13,6 +14,7 @@ APK_URL=https://github.com/humblemuzzu/dumbtv/releases/download/launcher-v$VERSI
 
 PKG=tv.dumbtv.home
 GUARD=$PKG/$PKG.Guard
+LISTENER=$PKG/$PKG.VpnWatch
 OLD_GUARD=com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService
 ADB=${ADB:-adb}
 
@@ -27,7 +29,13 @@ case ${1:-} in
   "") ;;
   --build) mode=build ;;
   --undo) mode=undo ;;
-  *) echo "usage: $0 [--build | --undo]" >&2; exit 2 ;;
+  --apk)
+    mode=apk
+    [[ -n ${2:-} ]] || { echo "usage: $0 --apk FILE" >&2; exit 2; }
+    # The cd above moved into launcher/; a relative path is the caller's.
+    case $2 in /*) APK_FILE=$2 ;; *) APK_FILE=$OLDPWD/$2 ;; esac
+    [[ -f $APK_FILE ]] || { echo "error: no APK at $APK_FILE" >&2; exit 1; } ;;
+  *) echo "usage: $0 [--build | --apk FILE | --undo]" >&2; exit 2 ;;
 esac
 
 command -v "$ADB" >/dev/null || { echo "error: adb not found — install Android platform-tools" >&2; exit 1; }
@@ -45,6 +53,17 @@ put_secure() {
   got=$(sh_ settings get secure "$1" | tr -d '\r')
   [[ $got == "$2" || ( -z $2 && $got == null ) ]] && return 0
   sh_ content insert --uri content://settings/secure --bind "name:s:$1" --bind "value:s:$2"
+}
+
+# Lets the VPN pill read NordVPN's status notification ($1), or stops it (nothing),
+# keeping every other notification listener.
+set_listener() {
+  local cur
+  cur=$(sh_ settings get secure enabled_notification_listeners | tr -d '\r')
+  [[ $cur == null ]] && cur=
+  cur=$(printf '%s' "$cur" | tr ':' '\n' | { grep -vxF -e "$LISTENER" -e '' || true; } | paste -sd: -)
+  if [[ -n ${1:-} ]]; then cur=${cur:+$cur:}$1; fi
+  put_secure enabled_notification_listeners "$cur"
 }
 
 # Puts $1 (or nothing) in place of any launcher's service, keeping every other service.
@@ -80,6 +99,7 @@ if [[ $mode == undo ]]; then
   sh_ appops set $PKG GET_USAGE_STATS default >/dev/null 2>&1 || true
   set_futurity off
   set_guard ""
+  set_listener ""
   sh_ dumpsys deviceidle whitelist -$PKG >/dev/null 2>&1 || true
   sh_ am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1 || true
   echo "HOME handed back to Amazon's launcher (dumbtv home stays installed: adb uninstall $PKG)"
@@ -98,6 +118,8 @@ install_apk() {
 
 if [[ $mode == build ]]; then
   build_apk
+elif [[ $mode == apk ]]; then
+  APK=$APK_FILE
 else
   mkdir -p build
   APK=build/dumbtv-home-$VERSION.apk
@@ -137,6 +159,7 @@ case $out in
   *) echo "error: adb install failed: $(printf '%s' "$out" | tail -1)" >&2; exit 1 ;;
 esac
 echo "installed $PKG"
+set_listener $LISTENER
 
 sh_ dumpsys deviceidle whitelist +$PKG >/dev/null
 
