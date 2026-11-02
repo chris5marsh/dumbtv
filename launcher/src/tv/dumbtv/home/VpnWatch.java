@@ -21,6 +21,10 @@ import android.text.TextUtils;
  */
 public final class VpnWatch extends NotificationListenerService {
     static final String PACKAGE = "com.nordvpn.android";
+    /** Apps that ask to connect the VPN first when it is off. */
+    static final java.util.Set<String> NEEDS_VPN = java.util.Collections.singleton("ar.tvplayer.tv");
+    /** A target for NordVPN's quick connect: any country will do. */
+    static final String ANY = "*";
     private static final long SWITCH_MS = 30_000;
     static volatile boolean available;
     static volatile boolean connected;
@@ -31,6 +35,8 @@ public final class VpnWatch extends NotificationListenerService {
     private static volatile String target;
     private static volatile long targetUntil;
     private static volatile boolean connectSent;
+    /** Opened instead of home once the target is reached. */
+    private static volatile Intent then;
     /** Read by {@link Guard}: NordVPN's Disconnect button should be pressed. */
     static volatile boolean disconnecting;
 
@@ -45,6 +51,12 @@ public final class VpnWatch extends NotificationListenerService {
 
     /** Connects NordVPN to {@code code}'s country, or disconnects it when {@code code} is "". */
     static void request(Context c, String code) {
+        request(c, code, null);
+    }
+
+    /** As {@link #request(Context, String)}, then opens {@code next} instead of coming home. */
+    static void request(Context c, String code, Intent next) {
+        then = next;
         target = code;
         targetUntil = SystemClock.elapsedRealtime() + SWITCH_MS;
         connectSent = false;
@@ -58,16 +70,20 @@ public final class VpnWatch extends NotificationListenerService {
 
     private static void connect(Context c) {
         connectSent = true;
-        open(c, "nordvpn://connect?country=" + Uri.encode(target.toLowerCase(java.util.Locale.ROOT)));
+        open(c, ANY.equals(target) ? "nordvpn://connect"
+                : "nordvpn://connect?country=" + Uri.encode(target.toLowerCase(java.util.Locale.ROOT)));
     }
 
     private static void open(Context c, String uri) {
-        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(PACKAGE)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        start(c, new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(PACKAGE));
+    }
+
+    private static void start(Context c, Intent i) {
         try {
-            c.startActivity(i);
+            c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (ActivityNotFoundException e) {
             target = null;
+            then = null;
             disconnecting = false;
         }
     }
@@ -77,13 +93,17 @@ public final class VpnWatch extends NotificationListenerService {
         String t = pending();
         if (t == null) {
             target = null;
+            then = null;
             disconnecting = false;
             return;
         }
-        if (t.isEmpty() ? !connected : connected && t.equals(country)) {
+        if (t.isEmpty() ? !connected : connected && (ANY.equals(t) || t.equals(country))) {
             target = null;
             disconnecting = false;
-            Guard.home(this);
+            Intent next = then;
+            then = null;
+            if (next != null) start(this, next);
+            else Guard.home(this);
         } else if (!connected && !t.isEmpty() && !connectSent) {
             disconnecting = false;
             connect(this);

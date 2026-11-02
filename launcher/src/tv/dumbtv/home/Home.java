@@ -593,14 +593,14 @@ public final class Home extends Activity {
                             if (shortcut != null) return shortcut;
                             View remembered = rememberedTile(Catalog.APPS);
                             if (remembered != null) return remembered;
-                            View above = nearest(apps.tiles(), focused);
+                            View above = nearest(apps.tiles(), focused, true);
                             if (above != null) return above;
                         }
                     }
                 }
                 if (focused != null && focused.getParent() == vpn.strip) {
                     if (direction == View.FOCUS_UP) {
-                        View above = nearest(apps.tiles(), focused);
+                        View above = nearest(apps.tiles(), focused, true);
                         if (above != null) return above;
                     }
                     if (direction == View.FOCUS_DOWN) {
@@ -671,17 +671,22 @@ public final class Home extends Activity {
      * visual row so a wrapped grid does not match a tile several rows further down.
      */
     private static View nearest(ViewGroup strip, View from) {
+        return nearest(strip, from, false);
+    }
+
+    /** The tile in {@code strip}'s top row, or its bottom row when moving up into it, nearest {@code from}'s centre. */
+    private static View nearest(ViewGroup strip, View from, boolean bottom) {
         int n = strip.getChildCount();
         if (n == 0) return null;
         int[] at = new int[2];
         from.getLocationOnScreen(at);
         int x = at[0] + from.getWidth() / 2;
         int[] ys = new int[n];
-        int topY = Integer.MAX_VALUE;
+        int topY = bottom ? Integer.MIN_VALUE : Integer.MAX_VALUE;
         for (int i = 0; i < n; i++) {
             strip.getChildAt(i).getLocationOnScreen(at);
             ys[i] = at[1];
-            topY = Math.min(topY, at[1]);
+            topY = bottom ? Math.max(topY, at[1]) : Math.min(topY, at[1]);
         }
         View best = null;
         int bestGap = Integer.MAX_VALUE;
@@ -1075,7 +1080,12 @@ public final class Home extends Activity {
 
     private void open(Tile t) {
         if (Catalog.APPS.equals(t.kind)) {
-            launch(new Intent(t.item.intent), t.item.id);
+            if (VpnWatch.NEEDS_VPN.contains(t.item.id) && VpnWatch.available && !VpnWatch.connected
+                    && VpnWatch.pending() == null) {
+                askVpn(t);
+            } else {
+                launch(new Intent(t.item.intent), t.item.id);
+            }
             return;
         }
         Intent own = Input.intent(this, cfg, t.item, Catalog.label(cfg, t.item));
@@ -1085,6 +1095,26 @@ public final class Home extends Activity {
         // nothing (ActivityStarter.complyActivityFlags), so it is started plainly.
         if (own != null) startActivity(own);
         else launch(new Intent(t.item.intent), null);
+    }
+
+    /** Offers to connect the VPN before opening an app that needs it; Yes is the default. */
+    private void askVpn(Tile t) {
+        java.util.List<String> recent = VpnState.recent(VpnWatch.prefs(this).getString("recent", ""), "");
+        String code = recent.isEmpty() ? VpnWatch.ANY : recent.get(0);
+        AlertDialog d = new AlertDialog.Builder(this, Ui.DIALOG)
+                .setTitle("You aren't connected to the VPN")
+                .setMessage("Would you like to connect"
+                        + (recent.isEmpty() ? "" : " to " + VpnState.name(code)) + "?")
+                // Fire OS lays buttons out positive, neutral, negative; these roles read Cancel, No, Yes.
+                .setPositiveButton("Cancel", null)
+                .setNeutralButton("No", (x, w) -> launch(new Intent(t.item.intent), t.item.id))
+                .setNegativeButton("Yes", (x, w) -> {
+                    Recent.opened(this, t.item.id);
+                    VpnWatch.request(this, code, new Intent(t.item.intent)
+                            .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+                })
+                .show();
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
     }
 
     private void launch(Intent i, String pkg) {
