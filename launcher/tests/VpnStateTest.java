@@ -14,6 +14,11 @@ public final class VpnStateTest {
         check(VpnState.recent("GB,AU,IS", "AU").equals(Arrays.asList("AU", "GB", "IS")));
         check(VpnState.recent("GB,GB,AU,IS,US", "").equals(Arrays.asList("GB", "AU", "IS", "US")));
         check(VpnState.recent("GB,AU,IS,US", "CH").equals(Arrays.asList("CH", "GB", "AU", "IS")));
+        check(VpnState.satisfies(true, "FI", "FI"));
+        check(!VpnState.satisfies(true, "GB", "FI"));
+        check(!VpnState.satisfies(false, "", "FI"));
+        check(VpnState.satisfies(true, "GB", ""));
+        check(!VpnState.satisfies(false, "", ""));
         check("1:01:01".equals(VpnState.duration(3661000)));
         check("0:00:00".equals(VpnState.duration(-1)));
         check("🇬🇧".equals(VpnState.flag("GB")));

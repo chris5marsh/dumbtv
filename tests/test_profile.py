@@ -57,6 +57,7 @@ class ProfileTest(unittest.TestCase):
             "ar.tvplayer.tv": app(installer="com.android.packageinstaller"),
             "tv.dumbtv.home": app(installer="null"),
             "org.smarttube.stable": app(installer="null"),
+            "com.amazon.firetv.youtube": app(),
             "dnsfilter.android": app(installer="null", launchable=False),
             "com.amazon.tv.settings.v2.overlay": app(installer="null", launchable=False),
             "com.amazon.tv.launcher": app(system=True),

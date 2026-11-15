@@ -6,6 +6,7 @@ import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
@@ -231,6 +232,7 @@ public final class Home extends Activity {
         if (cfg.version() != applied) apply();
         else background();
         refreshRecent();
+        askPending();
         IntentFilter f = new IntentFilter(Intent.ACTION_TIME_TICK);
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
@@ -1080,9 +1082,8 @@ public final class Home extends Activity {
 
     private void open(Tile t) {
         if (Catalog.APPS.equals(t.kind)) {
-            if (VpnWatch.NEEDS_VPN.contains(t.item.id) && VpnWatch.available && !VpnWatch.connected
-                    && VpnWatch.pending() == null) {
-                askVpn(t);
+            if (!VpnWatch.ready(t.item.id)) {
+                askVpn(t.item);
             } else {
                 launch(new Intent(t.item.intent), t.item.id);
             }
@@ -1098,23 +1099,52 @@ public final class Home extends Activity {
     }
 
     /** Offers to connect the VPN before opening an app that needs it; Yes is the default. */
-    private void askVpn(Tile t) {
+    /** Set by {@link Guard} when an app that needs a VPN country was opened some other way. */
+    static volatile String askVpnFor;
+
+    /** Asks about an app {@link Guard} sent back here, once its tile's details are known. */
+    private void askPending() {
+        String pkg = askVpnFor;
+        askVpnFor = null;
+        if (pkg == null || VpnWatch.ready(pkg)) return;
+        for (Item it : apps.all) {
+            if (pkg.equals(it.id)) {
+                askVpn(it);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Offers to connect the VPN before opening {@code it}; connecting is the default. An app that
+     * needs a particular country has no "open anyway": Cancel or Connect.
+     */
+    private void askVpn(Item it) {
+        String need = VpnWatch.NEEDS_VPN.get(it.id);
         java.util.List<String> recent = VpnState.recent(VpnWatch.recent(this), "");
-        String code = recent.isEmpty() ? VpnWatch.ANY : recent.get(0);
-        AlertDialog d = new AlertDialog.Builder(this, Ui.DIALOG)
-                .setTitle("You aren't connected to the VPN")
-                .setMessage("Would you like to connect"
-                        + (recent.isEmpty() ? "" : " to " + VpnState.name(code)) + "?")
-                // Fire OS lays buttons out positive, neutral, negative; these roles read Cancel, No, Yes.
-                .setPositiveButton("Cancel", null)
-                .setNeutralButton("No", (x, w) -> launch(new Intent(t.item.intent), t.item.id))
-                .setNegativeButton("Yes", (x, w) -> {
-                    Recent.opened(this, t.item.id);
-                    VpnWatch.request(this, code, new Intent(t.item.intent)
-                            .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
-                })
-                .show();
-        d.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
+        String code = !need.isEmpty() ? need : recent.isEmpty() ? VpnWatch.ANY : recent.get(0);
+        Intent then = new Intent(it.intent).addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        DialogInterface.OnClickListener connect = (x, w) -> {
+            Recent.opened(this, it.id);
+            VpnWatch.request(this, code, then);
+        };
+        // Fire OS lays buttons out positive, neutral, negative; these roles read Cancel, No, Yes.
+        AlertDialog.Builder b = new AlertDialog.Builder(this, Ui.DIALOG).setPositiveButton("Cancel", null);
+        if (need.isEmpty()) {
+            b.setTitle("You aren't connected to the VPN")
+                    .setMessage("Would you like to connect"
+                            + (recent.isEmpty() ? "" : " to " + VpnState.name(code)) + "?")
+                    .setNeutralButton("No", (x, w) -> launch(new Intent(it.intent), it.id))
+                    .setNegativeButton("Yes", connect);
+        } else {
+            String app = Catalog.label(cfg, it).toString();
+            b.setTitle(app + " needs the VPN in " + VpnState.name(need))
+                    .setMessage((VpnWatch.connected
+                            ? "You're connected to " + VpnState.name(VpnWatch.country) + ". Switch to "
+                            : "Connect to ") + VpnState.name(need) + " and open " + app + "?")
+                    .setNegativeButton("Connect", connect);
+        }
+        b.show().getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
     }
 
     private void launch(Intent i, String pkg) {

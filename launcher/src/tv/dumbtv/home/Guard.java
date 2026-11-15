@@ -193,6 +193,14 @@ public final class Guard extends AccessibilityService {
             onAmazonHome = false;
             paused = false;
             if (!getPackageName().contentEquals(pkg)) arrived(this);
+            // An app that must have the VPN in one country came up some other way (voice, recent
+            // apps): back to home, which asks to connect there first.
+            String app = pkg.toString();
+            String need = VpnWatch.NEEDS_VPN.get(app);
+            if (need != null && !need.isEmpty() && !VpnWatch.ready(app)) {
+                Home.askVpnFor = app;
+                home(this);
+            }
             return;
         }
         onAmazonHome = cls != null && AMAZON_HOME.contentEquals(cls);

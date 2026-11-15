@@ -35,6 +35,11 @@ final class VpnState {
         return text.toLowerCase(Locale.ROOT).contains("connected to");
     }
 
+    /** Whether a connection meets {@code need}: "" is any country, otherwise that one. */
+    static boolean satisfies(boolean connected, String country, String need) {
+        return connected && (need.isEmpty() || need.equals(country));
+    }
+
     static String name(String code) {
         return new Locale("", code).getDisplayCountry(Locale.ENGLISH);
     }

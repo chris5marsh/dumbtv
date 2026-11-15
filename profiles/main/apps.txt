@@ -11,5 +11,6 @@ com.ionitech.airscreen                   appstore
 com.mobileiq.demand5                     appstore
 com.netflix.ninja                        appstore
 com.nordvpn.android                      appstore
+com.yle.webtv                            sideload
 uk.co.bbc.iplayer                        appstore
 uk.co.uktv.dave                          appstore

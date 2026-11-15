@@ -21,8 +21,21 @@ import android.text.TextUtils;
  */
 public final class VpnWatch extends NotificationListenerService {
     static final String PACKAGE = "com.nordvpn.android";
-    /** Apps that ask to connect the VPN first when it is off. */
-    static final java.util.Set<String> NEEDS_VPN = java.util.Collections.singleton("ar.tvplayer.tv");
+    /**
+     * Apps that want the VPN before they open. "" asks to connect anywhere and lets the app open
+     * without it; a country code means the app only opens once NordVPN is in that country.
+     */
+    static final java.util.Map<String, String> NEEDS_VPN = new java.util.HashMap<>();
+    static {
+        NEEDS_VPN.put("ar.tvplayer.tv", "");
+        NEEDS_VPN.put("com.yle.webtv", "FI");
+    }
+
+    /** True when the VPN's current state is what {@code pkg} needs, or it needs nothing. */
+    static boolean ready(String pkg) {
+        String need = NEEDS_VPN.get(pkg);
+        return need == null || !available || pending() != null || VpnState.satisfies(connected, country, need);
+    }
     /** A target for NordVPN's quick connect: any country will do. */
     static final String ANY = "*";
     private static final long SWITCH_MS = 30_000;

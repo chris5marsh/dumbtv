@@ -28,8 +28,9 @@ parse_flags "$@"
 
 DIR=$ROOT/profiles/$NAME
 PKG=tv.dumbtv.home
-# Installed and kept up by dumbtv's own scripts, so neither copied nor offered for removal.
-OURS="$PKG dnsfilter.android org.smarttube.stable"
+# Installed, kept up or switched off by dumbtv's own scripts (youtube.sh decides whether
+# Amazon's YouTube app stays), so neither copied nor offered for removal.
+OURS="$PKG dnsfilter.android org.smarttube.stable com.amazon.firetv.youtube"
 CONF_ON_TV=/sdcard/Android/data/$PKG/files/home.conf
 CONF_DROP=/sdcard/Android/media/$PKG/home.conf
 APPSTORE=com.amazon.venezia
