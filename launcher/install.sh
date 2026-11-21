@@ -64,6 +64,16 @@ set_listener() {
   cur=$(printf '%s' "$cur" | tr ':' '\n' | { grep -vxF -e "$LISTENER" -e '' || true; } | paste -sd: -)
   if [[ -n ${1:-} ]]; then cur=${cur:+$cur:}$1; fi
   put_secure enabled_notification_listeners "$cur"
+  # Android 8 and later keep their own list of allowed listeners and do not watch the
+  # setting: on a Fire OS 7 stick the write above left the pill on "VPN status unavailable".
+  # cmd notification (sdk 26+) allows and binds, or unbinds, at once.
+  [[ $dev_sdk -ge 26 ]] || return 0
+  if [[ -n ${1:-} ]]; then
+    sh_ cmd notification allow_listener "$1" >/dev/null 2>&1 ||
+      echo "note: could not allow the VPN status reader: adb shell cmd notification allow_listener $1"
+  else
+    sh_ cmd notification disallow_listener "$LISTENER" >/dev/null 2>&1 || true
+  fi
 }
 
 # Puts $1 (or nothing) in place of any launcher's service, keeping every other service.

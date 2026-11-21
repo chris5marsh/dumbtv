@@ -12,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = "tv.dumbtv.home/tv.dumbtv.home.Guard"
+LISTENER = "tv.dumbtv.home/tv.dumbtv.home.VpnWatch"
 
 
 class LauncherUndoTest(unittest.TestCase):
@@ -50,6 +51,20 @@ class LauncherUndoTest(unittest.TestCase):
     def test_other_accessibility_services_are_kept(self):
         _, settings = self.undo({"secure/enabled_accessibility_services": f"example.reader/.Service:{GUARD}"})
         self.assertEqual(settings["secure/enabled_accessibility_services"], "example.reader/.Service")
+
+    def test_the_vpn_listener_is_unbound_and_others_kept(self):
+        # Android 8 and later ignore later writes to the setting, so only the cmd unbinds it.
+        commands, settings = self.undo({"secure/enabled_accessibility_services": GUARD,
+                                        "secure/enabled_notification_listeners": f"example.app/.Listen:{LISTENER}"})
+        self.assertIn(f"cmd notification disallow_listener {LISTENER}", commands)
+        self.assertEqual(settings["secure/enabled_notification_listeners"], "example.app/.Listen")
+
+    def test_fire_os_6_unbinds_the_vpn_listener_by_the_setting_alone(self):
+        # Android 7.1 has no cmd notification; it still follows the setting.
+        commands, settings = self.undo({"secure/enabled_accessibility_services": GUARD,
+                                        "secure/enabled_notification_listeners": LISTENER}, sdk=25)
+        self.assertFalse([c for c in commands if c.startswith("cmd notification")])
+        self.assertIn(settings.get("secure/enabled_notification_listeners"), (None, ""))
 
     def test_android14_undoes_the_device_config_value(self):
         # Android 12+ keeps min_futurity in DeviceConfig. The global setting is undone as
