@@ -214,6 +214,27 @@ one and what you can still do.
 **Your TV not here?** Run it, then `./scripts/contribute.sh`. It writes the report
 for you. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
 
+## Copy a TV to another TV
+
+```sh
+./scripts/profile.sh save main             # on the first TV's network
+./scripts/profile.sh apply main --dry-run  # on the second TV's network: see the plan
+./scripts/profile.sh apply main            # asks before it changes anything
+```
+
+`save` writes `profiles/main/`: dumbtv home's settings (app order, hidden apps,
+names, look, recent VPN locations), the list of apps and where each came from, and
+the dumbtv answers. Copies of dumbtv home and of apps that did not come from the
+Appstore go in `profiles/main/apks/`, which git ignores.
+
+`apply` installs that dumbtv home, adds each missing app (Appstore apps open their
+store page for you to press Get), lists the apps the profile does not have and
+removes them only if you say yes, then sets the home screen. It never offers
+dumbtv's own apps, Amazon's, or anything on a `never-disable.txt` list for removal.
+Logins and each app's own settings are not copied: Android keeps them from adb.
+On a TV that has never run dumbtv, run
+`CONF=profiles/main/dumbtv.conf ./scripts/all.sh` first.
+
 ## Undo
 
 ```sh
